@@ -1,16 +1,22 @@
 """
-Connects to Gmail over IMAP, pulls unread LinkedIn job alert emails from a
+Connects to Gmail over IMAP, pulls recent LinkedIn job alert emails from a
 labeled folder, extracts job postings (title, company, location, link,
 snippet), and inserts new ones into the jobs table.
 
-Fetching a message over IMAP marks it \\Seen by default, so unread search
-naturally gives us "alerts not processed yet" without extra bookkeeping.
+Deliberately does NOT rely on the \\Seen (read/unread) flag to decide what's
+"already processed" -- if you open an alert email yourself before the agent
+runs, an unread-only search would silently skip it. Instead this searches a
+rolling date window (ALERT_LOOKBACK_DAYS, default 2) every run, and leans on
+job_id deduplication in the database to make re-scanning the same emails
+safe and cheap: a posting already in the table is just skipped, not
+duplicated.
 """
 
 import email
 import imaplib
 import os
 import re
+from datetime import datetime, timedelta
 from email.message import Message
 from pathlib import Path
 
@@ -102,12 +108,19 @@ def job_id_from_link(link: str) -> str:
     return match.group(1) if match else link
 
 
-def fetch_linkedin_alerts(imap_host: str, user: str, app_password: str, label: str) -> list[dict]:
+def fetch_linkedin_alerts(
+    imap_host: str,
+    user: str,
+    app_password: str,
+    label: str,
+    lookback_days: int = 2,
+) -> list[dict]:
     conn = imaplib.IMAP4_SSL(imap_host)
     conn.login(user, app_password)
     conn.select(f'"{label}"')
 
-    _, data = conn.search(None, "(UNSEEN)")
+    since_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%d-%b-%Y")
+    _, data = conn.search(None, f'(SINCE "{since_date}")')
     message_ids = data[0].split()
 
     jobs = []
@@ -156,6 +169,7 @@ if __name__ == "__main__":
         user=os.environ["GMAIL_USER"],
         app_password=os.environ["GMAIL_APP_PASSWORD"],
         label=os.environ.get("GMAIL_LABEL", "LinkedIn Alerts"),
+        lookback_days=int(os.environ.get("ALERT_LOOKBACK_DAYS", "2")),
     )
     print(f"Parsed {len(jobs)} job posting(s) from alert emails.")
 
