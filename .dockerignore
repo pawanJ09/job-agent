@@ -14,3 +14,4 @@ README.md
 iam/
 requirements-dev.txt
 .idea/
+.env

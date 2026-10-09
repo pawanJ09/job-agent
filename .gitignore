@@ -11,3 +11,4 @@ htmlcov/
 .DS_Store
 .idea/
 response.json
+.env
