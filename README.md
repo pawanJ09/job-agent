@@ -100,8 +100,8 @@ POP/IMAP → make sure IMAP access is enabled.
 
 ## Step 3 — Add your resume
 
-Drop your resume file into `app/data/` (e.g. `app/data/resume.pdf`), and set
-`RESUME_PATH` in `.env` to match — the default `/app/data/resume.pdf` is correct if
+Drop your resume file into `app/data` (e.g. `app/data/resume.pdf`), and set
+`RESUME_PATH` in `../.env` to match — the default `/app/data/resume.pdf` is correct if
 you name the file exactly that.
 
 Only PDF and DOCX are supported. If your resume is a scanned/image-based PDF (not
@@ -272,7 +272,7 @@ docker compose logs -f app
   new value.
 - **Skills list needs updating**: edit `SKILLS` in `app/fetcher/skills.py`, then
   `docker compose build app` to rebuild.
-- **Changed `requirements.txt` or the `Dockerfile`**: always rebuild explicitly —
+- **Changed `app/requirements.txt` or the `Dockerfile`**: always rebuild explicitly —
   `docker compose build app` — since Docker won't detect those changes on its own.
 - **Stop everything**: `docker compose down` (add `-v` only if you also want to wipe
   the Postgres data volume — not recommended unless you're starting fresh).
