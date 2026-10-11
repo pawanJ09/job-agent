@@ -161,9 +161,7 @@ def save_new_jobs(jobs: list[dict]) -> int:
     return inserted
 
 
-if __name__ == "__main__":
-    # Run this directly to test:
-    #   docker compose run --rm app python parser/alert_parser.py
+def run() -> None:
     jobs = fetch_linkedin_alerts(
         imap_host="imap.gmail.com",
         user=os.environ["GMAIL_USER"],
@@ -175,3 +173,9 @@ if __name__ == "__main__":
 
     new_count = save_new_jobs(jobs)
     print(f"Inserted {new_count} new job(s) into the database.")
+
+
+if __name__ == "__main__":
+    # Run this directly to test:
+    #   docker compose run --rm app python parser/alert_parser.py
+    run()
