@@ -163,7 +163,7 @@ def save_new_jobs(jobs: list[dict]) -> int:
 
 if __name__ == "__main__":
     # Run this directly to test:
-    #   docker compose run --rm app python gmail/alert_parser.py
+    #   docker compose run --rm app python parser/alert_parser.py
     jobs = fetch_linkedin_alerts(
         imap_host="imap.gmail.com",
         user=os.environ["GMAIL_USER"],
