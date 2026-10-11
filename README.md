@@ -14,7 +14,12 @@ data to work with (e.g. the matcher needs jobs the fetcher already processed).
 
 ## Before you start: what you'll need
 
-- **Docker Desktop** installed and running on your machine.
+- **Docker Desktop** installed **and running** on your machine. Every `docker compose`
+  command in this guide needs the Docker engine up; if Docker Desktop is closed you'll
+  see an error like "Cannot connect to the Docker daemon." Open it and wait for the
+  whale icon in your menu bar to show it as running before continuing. (The only
+  step that doesn't need Docker is `save_session.py` in Step 6, which runs directly
+  on your machine.)
 - **Python 3.11+** installed locally (only for one setup script that needs a visible
   browser window — everything else runs inside Docker).
 - A **Gmail account** (used for both reading LinkedIn alerts and sending your digest).
@@ -100,8 +105,8 @@ POP/IMAP → make sure IMAP access is enabled.
 
 ## Step 3 — Add your resume
 
-Drop your resume file into `app/data` (e.g. `app/data/resume.pdf`), and set
-`RESUME_PATH` in `../.env` to match — the default `/app/data/resume.pdf` is correct if
+Drop your resume file into `app/data/` (e.g. `app/data/resume.pdf`), and set
+`RESUME_PATH` in `.env` to match — the default `/app/data/resume.pdf` is correct if
 you name the file exactly that.
 
 Only PDF and DOCX are supported. If your resume is a scanned/image-based PDF (not
@@ -261,6 +266,19 @@ docker compose ps
 docker compose logs -f app
 ```
 
+**To keep it running reliably, two things must stay true:**
+
+1. **Docker Desktop must be running.** `restart: always` only works while the Docker
+   engine is up. If you quit Docker Desktop, or your machine reboots and Docker
+   Desktop doesn't launch, the containers stay down and the daily run won't happen.
+   To avoid this, open Docker Desktop → Settings → General and enable **Start Docker
+   Desktop when you sign in to your computer**. After a reboot and login, Docker
+   Desktop starts and brings `db` and `app` back up automatically.
+2. **Your machine must be awake at the scheduled time.** If it's asleep at
+   `SCHEDULE_HOUR:SCHEDULE_MINUTE`, that day's run is skipped (APScheduler does not
+   catch up on missed runs by default). Pick a time your machine is usually awake, or
+   adjust your sleep settings.
+
 ---
 
 ## Day-to-day maintenance
@@ -272,7 +290,7 @@ docker compose logs -f app
   new value.
 - **Skills list needs updating**: edit `SKILLS` in `app/fetcher/skills.py`, then
   `docker compose build app` to rebuild.
-- **Changed `app/requirements.txt` or the `Dockerfile`**: always rebuild explicitly —
+- **Changed `requirements.txt` or the `Dockerfile`**: always rebuild explicitly —
   `docker compose build app` — since Docker won't detect those changes on its own.
 - **Stop everything**: `docker compose down` (add `-v` only if you also want to wipe
   the Postgres data volume — not recommended unless you're starting fresh).
@@ -285,6 +303,10 @@ docker compose logs -f app
   install` on your host at all — everything runs inside Docker, where this isn't an
   issue. If you do want a local dev environment, try `pip install --upgrade pip`
   first, or install PostgreSQL locally to provide `pg_config`.
+- **"Cannot connect to the Docker daemon"**: Docker Desktop isn't running. Open it,
+  wait for it to finish starting, and retry.
+- **Daily digest didn't arrive**: check Docker Desktop is running and your machine
+  was awake at the scheduled time, then look at `logs/pipeline.log` for that day.
 - **A stage reports 0 items to process**: check that the stage before it in the
   pipeline actually produced data — most stages depend on the previous one's output.
 - **Fetcher failing on every job**: your saved LinkedIn session has likely expired —
