@@ -62,42 +62,48 @@ def _parse_job_links(html: str) -> list[dict]:
     """
     Extracts job postings from a LinkedIn alert email's HTML body.
 
-    NOTE: LinkedIn's email markup can change without notice. This looks for
-    links containing "/jobs/view/", which has been a stable pattern, but the
-    surrounding company/location text extraction is best-effort. Check the
-    raw .eml files in /app/data/raw_emails against this logic if postings
-    come through with missing fields.
+    Each job appears as several links to the same posting: an image link with
+    no text, a full "card" link whose text holds title, "company · location"
+    and salary as separate pieces, and a link containing only the title. Links
+    are grouped per job id. The title comes from the shortest text, and
+    company/location from the card link's "company · location" piece.
+
+    NOTE: LinkedIn's email markup can change without notice. If postings come
+    through with missing fields, compare against the raw .eml files saved in
+    /app/data/raw_emails.
     """
     soup = BeautifulSoup(html, "html.parser")
-    seen_links = set()
-    jobs = []
+    button_labels = {"view job", "view", "apply", "easy apply", "see job"}
 
+    texts_by_job: dict[str, list[list[str]]] = {}
     for anchor in soup.select('a[href*="/jobs/view/"]'):
-        link = anchor["href"].split("?")[0]  # strip tracking params
-        if link in seen_links:
-            continue
-        seen_links.add(link)
+        job_id = job_id_from_link(anchor["href"].split("?")[0])
+        parts = [p.strip() for p in anchor.get_text("\n", strip=True).split("\n") if p.strip()]
+        if not parts or " ".join(parts).lower() in button_labels:
+            continue  # image-only link or a "View job" button
+        texts_by_job.setdefault(job_id, []).append(parts)
 
-        title = anchor.get_text(strip=True)
-        if not title:
-            continue  # likely an image-only link wrapping the same job
+    jobs = []
+    for job_id, candidates in texts_by_job.items():
+        card_parts = max(candidates, key=lambda p: len(" ".join(p)))
+        if len(candidates) == 1:
+            title_parts = card_parts[:1]  # only the card link exists: first piece is the title
+        else:
+            title_parts = min(candidates, key=lambda p: len(" ".join(p)))
 
-        # Best-effort: look for company/location in the nearest container text.
         company, location = None, None
-        container = anchor.find_parent(["td", "div"])
-        if container:
-            container_text = container.get_text(" ", strip=True)
-            # Heuristic only -- tune against real samples in raw_emails/.
-            parts = [p.strip() for p in container_text.split("\u00b7") if p.strip()]
-            if len(parts) >= 2:
-                company, location = parts[0], parts[1]
+        for part in card_parts:
+            if "\u00b7" in part:
+                left, _, right = part.partition("\u00b7")
+                company, location = left.strip() or None, right.strip() or None
+                break
 
         jobs.append({
-            "title": title,
-            "link": link,
+            "title": " ".join(title_parts),
+            "link": f"https://www.linkedin.com/jobs/view/{job_id}",
             "company": company,
             "location": location,
-            "snippet": None,  # alert emails rarely include a real snippet
+            "snippet": None,  # alert emails don't include a real snippet
         })
 
     return jobs
@@ -122,6 +128,7 @@ def fetch_linkedin_alerts(
     since_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%d-%b-%Y")
     _, data = conn.search(None, f'(SINCE "{since_date}")')
     message_ids = data[0].split()
+    print(f"Found {len(message_ids)} email(s) in '{label}' since {since_date}.")
 
     jobs = []
     for i, num in enumerate(message_ids):
@@ -177,5 +184,5 @@ def run() -> None:
 
 if __name__ == "__main__":
     # Run this directly to test:
-    #   docker compose run --rm app python parser/alert_parser.py
+    #   docker compose run --rm app python gmail/alert_parser.py
     run()
