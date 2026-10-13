@@ -274,10 +274,14 @@ docker compose logs -f app
    To avoid this, open Docker Desktop → Settings → General and enable **Start Docker
    Desktop when you sign in to your computer**. After a reboot and login, Docker
    Desktop starts and brings `db` and `app` back up automatically.
-2. **Your machine must be awake at the scheduled time.** If it's asleep at
-   `SCHEDULE_HOUR:SCHEDULE_MINUTE`, that day's run is skipped (APScheduler does not
-   catch up on missed runs by default). Pick a time your machine is usually awake, or
-   adjust your sleep settings.
+2. **Your machine must wake up within the catch-up window.** If it's asleep at
+   `SCHEDULE_HOUR:SCHEDULE_MINUTE` (for example, the laptop lid is closed), the
+   pipeline runs as soon as the machine wakes, as long as that's within
+   `CATCHUP_GRACE_HOURS` of the scheduled time (default 12). If it wakes after the
+   window has passed, that day's run is skipped. Missed runs never pile up: several
+   missed days collapse into a single catch-up run. This only covers sleep and wake.
+   If Docker Desktop itself was quit or restarted, the scheduler starts fresh and
+   does not remember what it missed.
 
 ---
 
@@ -305,8 +309,11 @@ docker compose logs -f app
   first, or install PostgreSQL locally to provide `pg_config`.
 - **"Cannot connect to the Docker daemon"**: Docker Desktop isn't running. Open it,
   wait for it to finish starting, and retry.
-- **Daily digest didn't arrive**: check Docker Desktop is running and your machine
-  was awake at the scheduled time, then look at `logs/pipeline.log` for that day.
+- **Daily digest arrived late**: expected if your machine was asleep at the scheduled
+  time. The pipeline runs when it wakes, within the `CATCHUP_GRACE_HOURS` window.
+- **Daily digest didn't arrive**: check Docker Desktop is running, and that your
+  machine woke within the catch-up window (`CATCHUP_GRACE_HOURS`). Then look at
+  `logs/pipeline.log` for that day.
 - **A stage reports 0 items to process**: check that the stage before it in the
   pipeline actually produced data — most stages depend on the previous one's output.
 - **Fetcher failing on every job**: your saved LinkedIn session has likely expired —

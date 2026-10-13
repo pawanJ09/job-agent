@@ -66,7 +66,7 @@ sys.stderr = _StreamToLogger(logger, logging.ERROR)
 # statements run at import time (there shouldn't be any, but just in case)
 # are captured too.
 from db.connection import init_db  # noqa: E402
-from parser.alert_parser import run as run_alert_parser  # noqa: E402
+from gmail.alert_parser import run as run_alert_parser  # noqa: E402
 from fetcher.job_fetcher import run as run_job_fetcher  # noqa: E402
 from matcher.matcher import run as run_matcher  # noqa: E402
 from drafter.drafter import run as run_drafter  # noqa: E402
@@ -120,9 +120,19 @@ def main() -> None:
     hour = int(os.environ.get("SCHEDULE_HOUR", "8"))
     minute = int(os.environ.get("SCHEDULE_MINUTE", "0"))
 
+    grace_hours = float(os.environ.get("CATCHUP_GRACE_HOURS", "12"))
+
     scheduler = BlockingScheduler()
-    scheduler.add_job(run_pipeline, CronTrigger(hour=hour, minute=minute))
-    logger.info(f"Scheduler started. Pipeline will run daily at {hour:02d}:{minute:02d}.")
+    scheduler.add_job(
+        run_pipeline,
+        CronTrigger(hour=hour, minute=minute),
+        misfire_grace_time=int(grace_hours * 3600),  # still run if this late
+        coalesce=True,  # several missed runs collapse into one
+    )
+    logger.info(
+        f"Scheduler started. Pipeline will run daily at {hour:02d}:{minute:02d}, "
+        f"with a {grace_hours:g}-hour catch-up window if the machine was asleep."
+    )
     scheduler.start()
 
 
