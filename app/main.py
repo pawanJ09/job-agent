@@ -119,18 +119,21 @@ def main() -> None:
 
     hour = int(os.environ.get("SCHEDULE_HOUR", "8"))
     minute = int(os.environ.get("SCHEDULE_MINUTE", "0"))
+    # IANA timezone name (e.g. America/Chicago). Without this, the hour above
+    # would be read in the container's clock, which defaults to UTC.
+    tz = os.environ.get("SCHEDULE_TIMEZONE", "America/Chicago")
 
     grace_hours = float(os.environ.get("CATCHUP_GRACE_HOURS", "12"))
 
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone=tz)
     scheduler.add_job(
         run_pipeline,
-        CronTrigger(hour=hour, minute=minute),
+        CronTrigger(hour=hour, minute=minute, timezone=tz),
         misfire_grace_time=int(grace_hours * 3600),  # still run if this late
         coalesce=True,  # several missed runs collapse into one
     )
     logger.info(
-        f"Scheduler started. Pipeline will run daily at {hour:02d}:{minute:02d}, "
+        f"Scheduler started. Pipeline will run daily at {hour:02d}:{minute:02d} {tz}, "
         f"with a {grace_hours:g}-hour catch-up window if the machine was asleep."
     )
     scheduler.start()

@@ -274,7 +274,10 @@ docker compose up -d
 Both `db` and `app` now run in the background, with `restart: always` — meaning they
 come back up automatically if the container crashes or your machine reboots (as long
 as Docker itself is running). `app` sits idle until `SCHEDULE_HOUR:SCHEDULE_MINUTE`
-(default `08:00`) each day, then runs the full pipeline automatically.
+(default `08:00`) each day, then runs the full pipeline automatically. That time is
+read in the timezone set by `SCHEDULE_TIMEZONE` in `.env` (default
+`America/Chicago`). Set it to your own IANA timezone name, since containers
+otherwise default to UTC. Log timestamps in `logs/pipeline.log` are still in UTC.
 
 Check it's running:
 ```bash
