@@ -12,3 +12,4 @@ htmlcov/
 .idea/
 response.json
 .env
+*auth_state.json
