@@ -93,10 +93,22 @@ steps walk through getting each credential. For now, just know what's coming:
 
 **2b. Create a filter and label** so the agent only reads LinkedIn alert emails:
 
-1. In Gmail, go to **Settings → See all settings → Filters and Blocked Addresses**.
-2. Create a filter matching mail from LinkedIn's job alert sender.
-3. Apply a label — e.g. `LinkedIn Alerts` — to matching mail.
-4. Make sure `GMAIL_LABEL` in `.env` matches the label name exactly.
+1. Open one of your actual LinkedIn job alert emails and copy its **From** address.
+   Use the address from a real alert, since the sender LinkedIn uses can vary.
+2. In Gmail, go to **Settings → See all settings → Filters and Blocked Addresses**.
+3. Create a filter with that address in the **From** field.
+4. On the next screen, tick **Apply the label** and create a label — e.g.
+   `LinkedIn Alerts`.
+5. Also tick **Also apply filter to matching conversations** if you want alerts
+   already in your inbox to be labeled too. A filter only applies to new mail
+   arriving after it's created unless you tick this box.
+6. Make sure `GMAIL_LABEL` in `.env` matches the label name exactly.
+
+> The alert parser only reads emails from the last 2 days (`ALERT_LOOKBACK_DAYS` in
+> `.env`), so older labeled alerts are ignored. If no alert has arrived in the last
+> 2 days, the first parser run in Step 8c will report 0 jobs. That doesn't mean
+> something is broken. Wait for the next alert, or temporarily raise
+> `ALERT_LOOKBACK_DAYS` to cover an older one.
 
 **2c. Check IMAP access**: go to Settings → See all settings → Forwarding and
 POP/IMAP and scroll to the **IMAP access** section. What you see depends on your
