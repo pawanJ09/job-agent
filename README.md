@@ -192,10 +192,28 @@ re-run this step.
 
 ## Step 7 — Build and start the database
 
+**First, start Docker Desktop.** This is the first step that needs it. Open the
+Docker Desktop app and wait until it reports that the engine is running (the whale
+icon in your menu bar stops animating). Then confirm from your terminal:
+
+```bash
+docker info
+```
+
+If that prints details about your Docker setup, you're good. If it says "Cannot
+connect to the Docker daemon," Docker Desktop isn't running yet. Wait a little
+longer or reopen it. From here on, every `docker compose` command in this guide
+needs Docker Desktop running.
+
+Then build the app image and start the database:
+
 ```bash
 docker compose build app
 docker compose up -d db
 ```
+
+The first build downloads the Python base image and installs the dependencies, so
+it can take a few minutes.
 
 Give it a few seconds, then confirm it's healthy:
 
