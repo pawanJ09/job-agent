@@ -356,6 +356,11 @@ docker compose logs -f app
   install` on your host at all — everything runs inside Docker, where this isn't an
   issue. If you do want a local dev environment, try `pip install --upgrade pip`
   first, or install PostgreSQL locally to provide `pg_config`.
+- **`docker compose build app` fails with `pg_config executable not found`**: the
+  Dockerfile's base image is a Python version too new for the pinned
+  `psycopg2-binary` (e.g. 3.14). The first line of `app/Dockerfile` must be
+  `FROM python:3.11-slim`. Fix it, then rebuild with `docker compose build app
+  --no-cache`.
 - **"Cannot connect to the Docker daemon"**: Docker Desktop isn't running. Open it,
   wait for it to finish starting, and retry.
 - **Daily digest arrived late**: expected if your machine was asleep at the scheduled
