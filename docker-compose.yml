@@ -9,6 +9,8 @@ services:
       POSTGRES_USER: job_agent
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: jobs
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

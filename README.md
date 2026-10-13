@@ -245,7 +245,7 @@ skim the `lines` array — if it's empty, PDF extraction likely failed (see Step
 
 **8c. Parse LinkedIn alert emails:**
 ```bash
-docker compose run --rm app python gmail/alert_parser.py
+docker compose run --rm app python parser/alert_parser.py
 ```
 Expect: a count of parsed and inserted jobs. If you get `0`, confirm you actually
 have alert emails in the labeled folder (check the `.eml` files saved to

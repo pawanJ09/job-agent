@@ -66,7 +66,7 @@ sys.stderr = _StreamToLogger(logger, logging.ERROR)
 # statements run at import time (there shouldn't be any, but just in case)
 # are captured too.
 from db.connection import init_db  # noqa: E402
-from gmail.alert_parser import run as run_alert_parser  # noqa: E402
+from parser.alert_parser import run as run_alert_parser  # noqa: E402
 from fetcher.job_fetcher import run as run_job_fetcher  # noqa: E402
 from matcher.matcher import run as run_matcher  # noqa: E402
 from drafter.drafter import run as run_drafter  # noqa: E402
