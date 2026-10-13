@@ -70,7 +70,7 @@ steps walk through getting each credential. For now, just know what's coming:
 | `GMAIL_LABEL` | The Gmail label you'll create in Step 2 |
 | `RESUME_PATH` | Step 3 below |
 | `OPENAI_API_KEY` | Step 4 below |
-| `LINKEDIN_SESSION_PATH` | Step 5 below |
+| `LINKEDIN_SESSION_PATH` | Optional, Step 6 below (leave the default) |
 | `DIGEST_RECIPIENT` | Usually the same as `GMAIL_USER` |
 | Everything else | Sensible defaults are already filled in — leave as-is for now |
 
@@ -170,7 +170,13 @@ Step 8.
 
 ---
 
-## Step 6 — Save a LinkedIn login session
+## Step 6 — Save a LinkedIn login session (optional)
+
+**You can skip this step.** The job fetcher requests each posting anonymously, with no
+login. A saved session is only used as a fallback if an anonymous request fails, so the
+pipeline works without one. Do this step only if you see anonymous fetches failing in
+Step 8d (the output says whether each job was fetched "anonymous" or via "session
+fallback").
 
 This step runs on **your own machine, not in Docker** — it needs to open a real,
 visible browser window so you can log in manually.
@@ -185,8 +191,8 @@ A browser window opens to the LinkedIn login page. Log in manually (solve any
 2FA/captcha prompt), then press Enter in your terminal once you see your feed. This
 saves `app/data/auth_state.json`, which the containerized fetcher reads later.
 
-This session will eventually expire — if the fetcher starts failing on everything,
-re-run this step.
+This session will eventually expire. It only matters if you rely on the fallback, in
+which case re-run this step when fetches that need it start failing.
 
 ---
 
@@ -245,7 +251,7 @@ skim the `lines` array — if it's empty, PDF extraction likely failed (see Step
 
 **8c. Parse LinkedIn alert emails:**
 ```bash
-docker compose run --rm app python parser/alert_parser.py
+docker compose run --rm app python gmail/alert_parser.py
 ```
 Expect: a count of parsed and inserted jobs. If you get `0`, confirm you actually
 have alert emails in the labeled folder (check the `.eml` files saved to
@@ -337,14 +343,18 @@ docker compose logs -f app
 ## Day-to-day maintenance
 
 - **Logs**: `logs/pipeline.log` on your host machine, or `docker compose logs app`.
-- **LinkedIn session expired**: re-run `save_session.py` (Step 6).
+- **Fetches failing**: check the reason printed per job in `logs/pipeline.log`. If you
+  use the optional saved session as a fallback and it expired, re-run `save_session.py`
+  (Step 6).
 - **Match threshold feels off**: check recent scores in the logs, adjust
   `MATCH_THRESHOLD` in `.env`, then `docker compose up -d` to restart `app` with the
   new value.
 - **Skills list needs updating**: edit `SKILLS` in `app/fetcher/skills.py`, then
   `docker compose build app` to rebuild.
-- **Changed `requirements.txt` or the `Dockerfile`**: always rebuild explicitly —
-  `docker compose build app` — since Docker won't detect those changes on its own.
+- **Changed any code, `requirements.txt`, or the `Dockerfile`**: always rebuild
+  explicitly — `docker compose build app` — since the code is copied into the image
+  at build time and Docker won't detect those changes on its own. (Only `./logs` and
+  `./app/data` are live-mounted from your machine.)
 - **Stop everything**: `docker compose down` (add `-v` only if you also want to wipe
   the Postgres data volume — not recommended unless you're starting fresh).
 
@@ -368,9 +378,18 @@ docker compose logs -f app
 - **Daily digest didn't arrive**: check Docker Desktop is running, and that your
   machine woke within the catch-up window (`CATCHUP_GRACE_HOURS`). Then look at
   `logs/pipeline.log` for that day.
+- **`ModuleNotFoundError: No module named 'db'` (or `gmail`, `fetcher`, ...)**: two
+  possible causes. (1) The image was built before `ENV PYTHONPATH=/app` was added to
+  `app/Dockerfile`: rebuild with `docker compose build app`. (2) A folder is in the
+  wrong place or misnamed. `main.py` imports `gmail.alert_parser`, so the alert
+  parser must be at `app/gmail/alert_parser.py`, not `app/parser/`. Compare your
+  folders against the project structure.
 - **A stage reports 0 items to process**: check that the stage before it in the
   pipeline actually produced data — most stages depend on the previous one's output.
-- **Fetcher failing on every job**: your saved LinkedIn session has likely expired —
-  re-run Step 6.
+- **Fetcher failing on every job**: the fetcher prints the reason for each failure
+  (for example `HTTP 429` means LinkedIn is rate-limiting you; wait and retry with longer
+  `FETCH_DELAY_*` values). Failed jobs are not retried automatically. To retry them:
+  `docker compose exec db psql -U job_agent -d jobs -c "UPDATE jobs SET fetch_status
+  = 'pending', status = 'new', match_score = NULL WHERE fetch_status = 'failed';"`
 - **Drafted messages sound off-tone**: adjust `SYSTEM_PROMPT` in
   `app/drafter/drafter.py` and rebuild.
