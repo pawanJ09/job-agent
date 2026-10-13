@@ -98,8 +98,24 @@ steps walk through getting each credential. For now, just know what's coming:
 3. Apply a label — e.g. `LinkedIn Alerts` — to matching mail.
 4. Make sure `GMAIL_LABEL` in `.env` matches the label name exactly.
 
-**2c. Confirm IMAP is enabled**: Settings → See all settings → Forwarding and
-POP/IMAP → make sure IMAP access is enabled.
+**2c. Check IMAP access**: go to Settings → See all settings → Forwarding and
+POP/IMAP and scroll to the **IMAP access** section. What you see depends on your
+account type:
+
+- **Personal Gmail account (@gmail.com)**: since January 2025 there is no Enable/
+  Disable IMAP choice, because IMAP is always on. Nothing to switch on here.
+- **Older layout (the toggle still appears)**: select **Enable IMAP** and click
+  **Save Changes** at the bottom of the page.
+- **Work or school (Google Workspace) account**: if the IMAP access section is
+  missing entirely, IMAP is probably disabled at the organization level and an
+  admin has to turn it on in the Google Admin console. This project can't work
+  around that.
+
+The most reliable check is running the alert parser in Step 8c. If it connects and
+reports a job count, IMAP is working. A login or authentication error usually means
+a problem with the app password (check `GMAIL_APP_PASSWORD` has no spaces and
+`GMAIL_USER` is your full address). A connection error points more toward IMAP being
+blocked at the account level.
 
 ---
 
