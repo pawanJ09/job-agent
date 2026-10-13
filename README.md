@@ -45,7 +45,7 @@ job-agent/
     ├── data/              # resume, parsed resume JSON, saved LinkedIn session
     ├── db/                # schema + connection helper
     ├── resume/            # resume parser
-    ├── gmail/             # alert email parser
+    ├── parser/            # alert email parser
     ├── fetcher/           # job detail fetcher + skills list
     ├── matcher/           # resume-to-posting matcher
     ├── drafter/           # message drafter
@@ -251,7 +251,7 @@ skim the `lines` array — if it's empty, PDF extraction likely failed (see Step
 
 **8c. Parse LinkedIn alert emails:**
 ```bash
-docker compose run --rm app python gmail/alert_parser.py
+docker compose run --rm app python parser/alert_parser.py
 ```
 Expect: a count of parsed and inserted jobs. If you get `0`, confirm you actually
 have alert emails in the labeled folder (check the `.eml` files saved to
@@ -378,12 +378,11 @@ docker compose logs -f app
 - **Daily digest didn't arrive**: check Docker Desktop is running, and that your
   machine woke within the catch-up window (`CATCHUP_GRACE_HOURS`). Then look at
   `logs/pipeline.log` for that day.
-- **`ModuleNotFoundError: No module named 'db'` (or `gmail`, `fetcher`, ...)**: two
+- **`ModuleNotFoundError: No module named 'db'` (or `parser`, `fetcher`, ...)**: two
   possible causes. (1) The image was built before `ENV PYTHONPATH=/app` was added to
   `app/Dockerfile`: rebuild with `docker compose build app`. (2) A folder is in the
-  wrong place or misnamed. `main.py` imports `gmail.alert_parser`, so the alert
-  parser must be at `app/gmail/alert_parser.py`, not `app/parser/`. Compare your
-  folders against the project structure.
+  wrong place or misnamed. `main.py` imports `parser.alert_parser`, so the alert
+  parser must be at `app/parser/alert_parser.py`.
 - **A stage reports 0 items to process**: check that the stage before it in the
   pipeline actually produced data — most stages depend on the previous one's output.
 - **Fetcher failing on every job**: the fetcher prints the reason for each failure
