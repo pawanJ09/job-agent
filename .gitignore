@@ -14,3 +14,4 @@ response.json
 .env
 *auth_state.json
 /app/data/
+/logs/
