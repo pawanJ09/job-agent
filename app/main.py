@@ -8,6 +8,11 @@ persistent, rotating log file under /app/logs (the mounted volume), in
 addition to normal stdout -- so logs survive container restarts and don't
 rely on `docker logs` history alone.
 
+Resume: at the start of every run, the resume is re-parsed if the parsed copy
+(resume_data.json) is missing or older than the resume file, so replacing your
+resume file is enough -- the matcher's embedding cache refreshes itself when the
+parsed text changes.
+
 Error isolation: if one stage raises an exception, it's logged and the
 pipeline moves on to the next stage rather than crashing the whole run.
 Stages are naturally resilient to a prior stage failing outright -- e.g. if
@@ -72,6 +77,11 @@ from fetcher.job_fetcher import run as run_job_fetcher  # noqa: E402
 from matcher.matcher import run as run_matcher  # noqa: E402
 from drafter.drafter import run as run_drafter  # noqa: E402
 from mailer.digest_mailer import run as run_mailer  # noqa: E402
+from resume.parser import (  # noqa: E402
+    OUTPUT_PATH as PARSED_RESUME_PATH,
+    parse_resume,
+    save_resume_data,
+)
 
 
 def run_fetcher_stage() -> None:
@@ -94,8 +104,48 @@ STAGES = [
 ]
 
 
+def ensure_resume_parsed() -> None:
+    """
+    Re-parses the resume if the parsed copy is missing or older than the resume
+    file. Raises if there is no usable resume at all, or if no text can be
+    extracted (the existing parsed copy is then left untouched).
+    """
+    resume_path = Path(os.environ.get("RESUME_PATH", "/app/data/resume.pdf"))
+
+    if not resume_path.exists():
+        if PARSED_RESUME_PATH.exists():
+            logger.warning(
+                f"Resume file not found at {resume_path}; using the existing parsed resume."
+            )
+            return
+        raise FileNotFoundError(
+            f"No resume at {resume_path} and no parsed resume exists. "
+            f"Add your resume file and check RESUME_PATH in .env."
+        )
+
+    if (
+        PARSED_RESUME_PATH.exists()
+        and PARSED_RESUME_PATH.stat().st_mtime >= resume_path.stat().st_mtime
+    ):
+        logger.info("Parsed resume is up to date.")
+        return
+
+    logger.info("Resume is new or changed since it was last parsed. Parsing it now.")
+    data = parse_resume(str(resume_path))
+    if not data["raw_text"].strip():
+        raise ValueError(
+            f"No text could be extracted from {resume_path}. A scanned/image-only PDF "
+            f"is a likely cause; re-export it as a text-based PDF or DOCX."
+        )
+    save_resume_data(data)
+
+
 def run_pipeline() -> None:
     logger.info("=== Pipeline run started ===")
+    try:
+        ensure_resume_parsed()
+    except Exception:
+        logger.exception("Resume parsing failed; continuing with the existing parsed resume, if any.")
     for name, stage_fn in STAGES:
         logger.info(f"--- Starting stage: {name} ---")
         try:

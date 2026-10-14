@@ -141,6 +141,15 @@ Only PDF and DOCX are supported. If your resume is a scanned/image-based PDF (no
 actual selectable text), extraction will fail silently — re-export as a text-based
 PDF or DOCX first.
 
+**Updating your resume later:** just replace the file in `app/data/`. At the start of
+every pipeline run, the app compares the file's modified time with the parsed copy
+(`resume_data.json`) and re-parses it automatically if the resume is newer. The matcher
+then re-embeds it on its own, because its cache is keyed to the resume text. If the
+app can't extract any text, it logs an error and keeps using the previous parsed
+resume. To force a re-parse, delete `app/data/resume_data.json`. (A file copied with an
+older timestamp than the parsed copy won't be noticed; deleting `resume_data.json` fixes
+that too.)
+
 ---
 
 ## Step 4 — Get an OpenAI API key
@@ -248,6 +257,8 @@ docker compose run --rm app python resume/parser.py
 ```
 Expect: a line count, and a new file at `app/data/resume_data.json`. Open it and
 skim the `lines` array — if it's empty, PDF extraction likely failed (see Step 3).
+You only need to run this by hand for testing: `main.py` does the same thing
+automatically at the start of each run when the resume is new or changed.
 
 **8c. Parse LinkedIn alert emails:**
 ```bash
@@ -330,14 +341,13 @@ docker compose logs -f app
    To avoid this, open Docker Desktop → Settings → General and enable **Start Docker
    Desktop when you sign in to your computer**. After a reboot and login, Docker
    Desktop starts and brings `db` and `app` back up automatically.
-2. **Your machine must wake up within the catch-up window.** If it's asleep at
-   `SCHEDULE_HOUR:SCHEDULE_MINUTE` (for example, the laptop lid is closed), the
-   pipeline runs as soon as the machine wakes, as long as that's within
-   `CATCHUP_GRACE_HOURS` of the scheduled time (default 12). If it wakes after the
-   window has passed, that day's run is skipped. Missed runs never pile up: several
-   missed days collapse into a single catch-up run. This only covers sleep and wake.
-   If Docker Desktop itself was quit or restarted, the scheduler starts fresh and
-   does not remember what it missed.
+2. **Your machine can sleep, but it has to be awake for the run to happen.** The app
+   checks the real clock once a minute and records the date of its last run in
+   `app/data/last_run.txt`. If your machine was asleep (or Docker Desktop was closed)
+   at `SCHEDULE_HOUR:SCHEDULE_MINUTE`, the pipeline starts within a minute of the
+   container running again, as long as no run has happened yet that day. Several missed
+   days still produce just one run. The run time is only a "not before" time: starting
+   the container late in the day with no run recorded triggers an immediate run.
 
 ---
 
@@ -375,15 +385,17 @@ docker compose logs -f app
 - **"Cannot connect to the Docker daemon"**: Docker Desktop isn't running. Open it,
   wait for it to finish starting, and retry.
 - **Daily digest arrived late**: expected if your machine was asleep at the scheduled
-  time. The pipeline runs when it wakes, within the `CATCHUP_GRACE_HOURS` window.
-- **Daily digest didn't arrive**: check Docker Desktop is running, and that your
-  machine woke within the catch-up window (`CATCHUP_GRACE_HOURS`). Then look at
-  `logs/pipeline.log` for that day.
+  time. The pipeline starts within a minute of the machine waking.
+- **Daily digest didn't arrive**: check Docker Desktop is running and the machine was
+  awake at some point after the scheduled time. Then look at `logs/pipeline.log` for
+  that day, and at `app/data/last_run.txt` (the date of the last run). To force a run
+  today, delete that file and run `docker compose up -d --force-recreate app`.
 - **`ModuleNotFoundError: No module named 'db'` (or `parser`, `fetcher`, ...)**: two
   possible causes. (1) The image was built before `ENV PYTHONPATH=/app` was added to
   `app/Dockerfile`: rebuild with `docker compose build app`. (2) A folder is in the
   wrong place or misnamed. `main.py` imports `parser.alert_parser`, so the alert
-  parser must be at `app/parser/alert_parser.py`.
+  parser must be at `app/parser/alert_parser.py`. Compare your
+  folders against the project structure.
 - **A stage reports 0 items to process**: check that the stage before it in the
   pipeline actually produced data — most stages depend on the previous one's output.
 - **Fetcher failing on every job**: the fetcher prints the reason for each failure
