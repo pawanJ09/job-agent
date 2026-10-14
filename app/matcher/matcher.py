@@ -33,7 +33,15 @@ def get_embedding(text: str, api_key: str) -> list[float]:
         json={"model": EMBEDDING_MODEL, "input": text[:8000]},  # keep well under the token limit
         timeout=30,
     )
-    response.raise_for_status()
+    if not response.ok:
+        try:
+            error = response.json().get("error", {})
+            detail = f"{error.get('code')}: {error.get('message')}"
+        except ValueError:
+            detail = response.text[:300]
+        raise RuntimeError(
+            f"OpenAI embeddings request failed (HTTP {response.status_code}) - {detail}"
+        )
     return response.json()["data"][0]["embedding"]
 
 
