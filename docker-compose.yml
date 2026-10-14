@@ -22,6 +22,7 @@ services:
   app:
     build: ./app
     container_name: job-agent-app
+    init: true   # lets the container stop cleanly instead of being force-killed (exit 137)
     restart: always
     env_file: .env
     environment:

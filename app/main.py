@@ -18,11 +18,12 @@ nothing, rather than erroring.
 import logging
 import os
 import sys
+import time
+from datetime import date, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -106,6 +107,30 @@ def run_pipeline() -> None:
     logger.info("=== Pipeline run complete ===")
 
 
+# Remembers the date of the last run, in the mounted data folder so it survives
+# container restarts and recreation.
+LAST_RUN_FILE = Path("/app/data/last_run.txt")
+POLL_SECONDS = 60
+
+
+def _last_run_date() -> date | None:
+    try:
+        return date.fromisoformat(LAST_RUN_FILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _record_run(run_date: date) -> None:
+    LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAST_RUN_FILE.write_text(run_date.isoformat())
+
+
+def _is_due(now: datetime, hour: int, minute: int, last_run: date | None) -> bool:
+    """True once today's scheduled time has passed and today's run hasn't happened."""
+    scheduled = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return now >= scheduled and last_run != now.date()
+
+
 def main() -> None:
     init_db()
 
@@ -121,22 +146,30 @@ def main() -> None:
     minute = int(os.environ.get("SCHEDULE_MINUTE", "0"))
     # IANA timezone name (e.g. America/Chicago). Without this, the hour above
     # would be read in the container's clock, which defaults to UTC.
-    tz = os.environ.get("SCHEDULE_TIMEZONE", "America/Chicago")
+    tz_name = os.environ.get("SCHEDULE_TIMEZONE", "America/Chicago")
+    tz = ZoneInfo(tz_name)
 
-    grace_hours = float(os.environ.get("CATCHUP_GRACE_HOURS", "12"))
-
-    scheduler = BlockingScheduler(timezone=tz)
-    scheduler.add_job(
-        run_pipeline,
-        CronTrigger(hour=hour, minute=minute, timezone=tz),
-        misfire_grace_time=int(grace_hours * 3600),  # still run if this late
-        coalesce=True,  # several missed runs collapse into one
-    )
     logger.info(
-        f"Scheduler started. Pipeline will run daily at {hour:02d}:{minute:02d} {tz}, "
-        f"with a {grace_hours:g}-hour catch-up window if the machine was asleep."
+        f"Scheduler started. Pipeline runs daily at {hour:02d}:{minute:02d} {tz_name}. "
+        f"The clock is checked every {POLL_SECONDS}s, so a missed run (machine asleep, "
+        f"Docker restarted) starts as soon as the container is running again."
     )
-    scheduler.start()
+    logger.info(f"Last recorded run: {_last_run_date() or 'never'}")
+
+    while True:
+        now = datetime.now(tz)
+        if _is_due(now, hour, minute, _last_run_date()):
+            logger.info(
+                f"Today's run is due (scheduled {hour:02d}:{minute:02d}, now {now:%H:%M}). Starting."
+            )
+            try:
+                run_pipeline()
+            except Exception:
+                logger.exception("Pipeline run failed unexpectedly.")
+            # Record the date even after an unexpected failure, so a persistent
+            # error doesn't make the pipeline re-run every minute.
+            _record_run(now.date())
+        time.sleep(POLL_SECONDS)
 
 
 if __name__ == "__main__":
