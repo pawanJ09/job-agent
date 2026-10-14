@@ -13,5 +13,6 @@ htmlcov/
 response.json
 .env
 *auth_state.json
-/app/data/
+/app/data/*
+!/app/data/.gitkeep
 /logs/
