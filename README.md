@@ -282,7 +282,8 @@ and it's easier to tune the prompt now than after it's unattended.
 ```bash
 docker compose run --rm app python mailer/digest_mailer.py
 ```
-Expect: an email in your inbox with a table of job/recruiter/message. Check how it
+Expect: an email in your inbox with a table of job, match percentage, recruiter and
+message. Check how it
 renders in your actual email client.
 
 ---

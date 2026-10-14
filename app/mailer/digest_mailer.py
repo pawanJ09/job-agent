@@ -25,7 +25,7 @@ def get_jobs_to_send() -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT job_id, title, company, link, recruiter_name, drafted_message
+                SELECT job_id, title, company, link, recruiter_name, drafted_message, match_score
                 FROM jobs
                 WHERE status = 'drafted'
                 ORDER BY created_at
@@ -40,6 +40,7 @@ def get_jobs_to_send() -> list[dict]:
             "link": r[3],
             "recruiter_name": r[4],
             "drafted_message": r[5],
+            "match_score": r[6],
         }
         for r in rows
     ]
@@ -55,12 +56,15 @@ def build_html_digest(jobs: list[dict]) -> str:
         recruiter = escape(job["recruiter_name"]) if job["recruiter_name"] else "<em>Not listed — add manually</em>"
         link = escape(job["link"])
         message = escape(job["drafted_message"] or "").replace("\n", "<br>")
+        # match_score is a 0-1 similarity; show it as a whole-number percentage.
+        match = f"{job['match_score'] * 100:.0f}%" if job["match_score"] is not None else "N/A"
 
         rows_html.append(f"""
             <tr>
                 <td style="padding:10px;border:1px solid #ddd;vertical-align:top;">
                     <a href="{link}">{title_company}</a>
                 </td>
+                <td style="padding:10px;border:1px solid #ddd;vertical-align:top;white-space:nowrap;">{match}</td>
                 <td style="padding:10px;border:1px solid #ddd;vertical-align:top;">{recruiter}</td>
                 <td style="padding:10px;border:1px solid #ddd;vertical-align:top;">{message}</td>
             </tr>
@@ -73,6 +77,7 @@ def build_html_digest(jobs: list[dict]) -> str:
         <table style="border-collapse:collapse;width:100%;">
             <tr style="background:#f2f2f2;">
                 <th style="padding:10px;border:1px solid #ddd;text-align:left;">Job Posting</th>
+                <th style="padding:10px;border:1px solid #ddd;text-align:left;">Match</th>
                 <th style="padding:10px;border:1px solid #ddd;text-align:left;">Recruiter</th>
                 <th style="padding:10px;border:1px solid #ddd;text-align:left;">Drafted Message</th>
             </tr>
