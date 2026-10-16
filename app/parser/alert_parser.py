@@ -184,5 +184,5 @@ def run() -> None:
 
 if __name__ == "__main__":
     # Run this directly to test:
-    #   docker compose run --rm app python gmail/alert_parser.py
+    #   docker compose run --rm app python parser/alert_parser.py
     run()

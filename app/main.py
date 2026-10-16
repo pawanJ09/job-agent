@@ -181,7 +181,104 @@ def _is_due(now: datetime, hour: int, minute: int, last_run: date | None) -> boo
     return now >= scheduled and last_run != now.date()
 
 
+PLACEHOLDERS = {
+    "you@gmail.com",
+    "your_16_char_app_password",
+    "your_openai_api_key_here",
+    "change_me",
+}
+
+# Settings the code cannot run without. None of them has a default.
+REQUIRED_SETTINGS = [
+    "DATABASE_URL",
+    "GMAIL_USER",
+    "GMAIL_APP_PASSWORD",
+    "OPENAI_API_KEY",
+    "DIGEST_RECIPIENT",
+    "SMTP_HOST",
+    "SMTP_PORT",
+]
+
+
+def _config_problems() -> list[str]:
+    """Returns a plain-language list of everything wrong with the configuration."""
+    problems: list[str] = []
+
+    for name in REQUIRED_SETTINGS:
+        value = os.environ.get(name, "").strip()
+        if not value:
+            problems.append(f"{name} is not set.")
+        elif value in PLACEHOLDERS:
+            problems.append(f"{name} still has the placeholder value from .env.example.")
+
+    db_password = os.environ.get("POSTGRES_PASSWORD", "")
+    if db_password == "change_me":
+        problems.append("POSTGRES_PASSWORD still has the placeholder value from .env.example.")
+    elif any(c in db_password for c in "@:/?#%") or any(c.isspace() for c in db_password):
+        problems.append(
+            "POSTGRES_PASSWORD contains a character that breaks the database connection "
+            "(one of @ : / ? # % or a space). Use letters and numbers only."
+        )
+
+    def number(name: str, cast, low: float, high: float, label: str) -> None:
+        raw = os.environ.get(name)
+        if not raw:
+            return
+        try:
+            value = cast(raw)
+        except ValueError:
+            problems.append(f"{name} must be {label}, but it is '{raw}'.")
+            return
+        if not low <= value <= high:
+            problems.append(f"{name} must be {label}, but it is '{raw}'.")
+
+    number("MATCH_THRESHOLD", float, 0, 1, "a number between 0 and 1")
+    number("SCHEDULE_HOUR", int, 0, 23, "a whole number from 0 to 23")
+    number("SCHEDULE_MINUTE", int, 0, 59, "a whole number from 0 to 59")
+    number("ALERT_LOOKBACK_DAYS", int, 1, 60, "a whole number from 1 to 60")
+    number("FETCH_DELAY_MIN_SECONDS", float, 0, 600, "a number of seconds from 0 to 600")
+    number("FETCH_DELAY_MAX_SECONDS", float, 0, 600, "a number of seconds from 0 to 600")
+    number("SMTP_PORT", int, 1, 65535, "a port number")
+
+    timezone_name = os.environ.get("SCHEDULE_TIMEZONE") or "UTC"
+    try:
+        ZoneInfo(timezone_name)
+    except Exception:
+        problems.append(
+            f"SCHEDULE_TIMEZONE '{timezone_name}' is not a valid timezone name. "
+            f"Use a name like America/New_York or Europe/London."
+        )
+
+    resume_path = Path(os.environ.get("RESUME_PATH", "/app/data/resume.pdf"))
+    if not resume_path.exists() and not PARSED_RESUME_PATH.exists():
+        problems.append(
+            f"No resume found at {resume_path}. Add your resume file and check RESUME_PATH."
+        )
+
+    return problems
+
+
+def check_config() -> None:
+    """Stops with a clear message if anything in the configuration is missing or wrong."""
+    problems = _config_problems()
+    if problems:
+        logger.error("The app can't start because of problems in your configuration:")
+        for problem in problems:
+            logger.error(f"  - {problem}")
+        logger.error(
+            "Fix them in your .env file, then run: docker compose up -d --force-recreate app"
+        )
+        sys.exit(1)
+
+    if not os.environ.get("SCHEDULE_TIMEZONE"):
+        logger.warning(
+            "SCHEDULE_TIMEZONE is not set, so the schedule uses UTC. "
+            "Set it in .env if you are elsewhere."
+        )
+
+
 def main() -> None:
+    check_config()
     init_db()
 
     run_mode = os.environ.get("RUN_MODE", "schedule")
@@ -194,9 +291,9 @@ def main() -> None:
 
     hour = int(os.environ.get("SCHEDULE_HOUR", "8"))
     minute = int(os.environ.get("SCHEDULE_MINUTE", "0"))
-    # IANA timezone name (e.g. America/Chicago). Without this, the hour above
+    # IANA timezone name (e.g. Europe/London). Without this, the hour above
     # would be read in the container's clock, which defaults to UTC.
-    tz_name = os.environ.get("SCHEDULE_TIMEZONE", "America/Chicago")
+    tz_name = os.environ.get("SCHEDULE_TIMEZONE") or "UTC"
     tz = ZoneInfo(tz_name)
 
     logger.info(
