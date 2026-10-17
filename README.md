@@ -12,6 +12,31 @@ data to work with (e.g. the matcher needs jobs the fetcher already processed).
 
 ---
 
+## Important: LinkedIn's terms and your account
+
+LinkedIn's terms restrict automated access to its service, including scraping. Please
+read them yourself. This is not legal advice. Here is what this app does with LinkedIn:
+
+1. **It reads your own job alert emails** from your own Gmail mailbox. It never logs
+   into LinkedIn for this.
+2. **For each new job, it requests that job's posting page** from LinkedIn to download
+   the full description, one request at a time with a pause of 10 to 30 seconds between
+   requests, without logging in. This is automated access and may conflict with
+   LinkedIn's terms.
+
+Because of that:
+- Don't shorten the delays (`FETCH_DELAY_*`) or raise the number of days scanned
+  (`ALERT_LOOKBACK_DAYS`) without a good reason.
+- Don't use the optional saved-login fallback in Step 6. It sends requests with your
+  own LinkedIn login, which ties them to your account.
+- LinkedIn can block or slow down requests at any time, and changes to its pages or
+  emails can break the app.
+
+You are responsible for how you use this software. It is provided as is, without
+warranty.
+
+---
+
 ## Before you start: what you'll need
 
 - **Docker Desktop** installed **and running** on your machine. Every `docker compose`
@@ -181,7 +206,8 @@ Step 8.
 
 ## Step 6 — Save a LinkedIn login session (optional)
 
-**You can skip this step.** The job fetcher requests each posting anonymously, with no
+**You can skip this step, and I recommend you do** (see "LinkedIn's terms" above). The
+job fetcher requests each posting anonymously, with no
 login. A saved session is only used as a fallback if an anonymous request fails, so the
 pipeline works without one. Do this step only if you see anonymous fetches failing in
 Step 8d (the output says whether each job was fetched "anonymous" or via "session
@@ -324,7 +350,7 @@ come back up automatically if the container crashes or your machine reboots (as 
 as Docker itself is running). `app` sits idle until `SCHEDULE_HOUR:SCHEDULE_MINUTE`
 (default `08:00`) each day, then runs the full pipeline automatically. That time is
 read in the timezone set by `SCHEDULE_TIMEZONE` in `.env` (default
-`America/Chicago`). Set it to your own IANA timezone name, since containers
+`UTC`). Set it to your own IANA timezone name, since containers
 otherwise default to UTC. Log timestamps in `logs/pipeline.log` are still in UTC.
 
 Check it's running:
@@ -386,6 +412,12 @@ docker compose logs -f app
   wait for it to finish starting, and retry.
 - **Daily digest arrived late**: expected if your machine was asleep at the scheduled
   time. The pipeline starts within a minute of the machine waking.
+- **The app container keeps restarting, or `docker compose logs app` starts with "The
+  app can't start because of problems in your configuration"**: the app checks your
+  `.env` at startup and lists exactly what is missing or wrong (a setting that is
+  missing, a leftover placeholder from `.env.example`, a database password containing
+  `@ : / ? # %` or a space, an invalid number or timezone, or no resume file). Fix each item in
+  `.env`, then run `docker compose up -d --force-recreate app`.
 - **Daily digest didn't arrive**: check Docker Desktop is running and the machine was
   awake at some point after the scheduled time. Then look at `logs/pipeline.log` for
   that day, and at `app/data/last_run.txt` (the date of the last run). To force a run
