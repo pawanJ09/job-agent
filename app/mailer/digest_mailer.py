@@ -12,6 +12,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import escape
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -25,7 +26,7 @@ def get_jobs_to_send() -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT job_id, title, company, link, recruiter_name, drafted_message, match_score
+                SELECT job_id, title, company, link, recruiter_name, drafted_message, match_score, created_at
                 FROM jobs
                 WHERE status = 'drafted'
                 ORDER BY created_at
@@ -41,12 +42,37 @@ def get_jobs_to_send() -> list[dict]:
             "recruiter_name": r[4],
             "drafted_message": r[5],
             "match_score": r[6],
+            "created_at": r[7],
         }
         for r in rows
     ]
 
 
+def _date_label(jobs: list[dict]) -> str:
+    """
+    The days these postings were first found in the alert emails, in the schedule
+    timezone. For example "Oct 16, 2026" or "Oct 15 \u2013 16, 2026".
+    """
+    tz = ZoneInfo(os.environ.get("SCHEDULE_TIMEZONE") or "UTC")
+    days = sorted({j["created_at"].astimezone(tz).date() for j in jobs if j.get("created_at")})
+    if not days:
+        return ""
+    first, last = days[0], days[-1]
+    if first == last:
+        return f"{first:%b} {first.day}, {first.year}"
+    if first.year == last.year and first.month == last.month:
+        return f"{first:%b} {first.day} \u2013 {last.day}, {first.year}"
+    if first.year == last.year:
+        return f"{first:%b} {first.day} \u2013 {last:%b} {last.day}, {first.year}"
+    return f"{first:%b} {first.day}, {first.year} \u2013 {last:%b} {last.day}, {last.year}"
+
+
 def build_html_digest(jobs: list[dict]) -> str:
+    heading = f"Daily Job Match Digest \u2014 {len(jobs)} posting(s)"
+    date_label = _date_label(jobs)
+    if date_label:
+        heading += f" from {date_label}"
+
     rows_html = []
     for job in jobs:
         title_company = escape(job["title"] or "")
@@ -73,7 +99,7 @@ def build_html_digest(jobs: list[dict]) -> str:
     return f"""
     <html>
     <body style="font-family:Arial,sans-serif;">
-        <h2>Daily Job Match Digest — {len(jobs)} posting(s)</h2>
+        <h2>{escape(heading)}</h2>
         <table style="border-collapse:collapse;width:100%;">
             <tr style="background:#f2f2f2;">
                 <th style="padding:10px;border:1px solid #ddd;text-align:left;">Job Posting</th>
