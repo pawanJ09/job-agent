@@ -1,0 +1,94 @@
+# Publishes a release whenever you push a version tag:
+#
+#   git tag v1.0.1
+#   git push origin v1.0.1
+#
+# It runs the same Makefile commands you would run by hand: build the image, check
+# that no personal data is inside, push it to ghcr.io for Intel and Apple Silicon,
+# build the kit zip, and create a GitHub release with the zip attached.
+#
+# The version comes from the tag: v1.0.1 becomes image tag 1.0.1.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write   # create the release and attach the kit zip
+  packages: write   # push the image to ghcr.io
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Work out the version and image name
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          OWNER="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "VERSION=$VERSION"
+            echo "IMAGE=ghcr.io/$OWNER/job-agent"
+          } >> "$GITHUB_ENV"
+          echo "Releasing version $VERSION as ghcr.io/$OWNER/job-agent"
+
+      - name: Check the Python files for syntax errors
+        run: |
+          python3 -m compileall -q app
+          find app -name __pycache__ -prune -exec rm -rf {} +
+
+      - name: Set up emulation for the arm64 build
+        uses: docker/setup-qemu-action@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stop if this version was already published
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "::error::Image $IMAGE:$VERSION already exists. Never reuse a version: tag a new one."
+            exit 1
+          fi
+
+      - name: Build, check and push the image
+        run: make push GITHUB_USER="$GITHUB_REPOSITORY_OWNER" VERSION="$VERSION"
+
+      - name: Build the kit
+        run: make kit GITHUB_USER="$GITHUB_REPOSITORY_OWNER" VERSION="$VERSION"
+
+      - name: Create the release with the kit attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<NOTES
+          Download job-agent-kit.zip below, unzip it, and follow the README inside.
+
+          You need Docker Desktop, a Gmail account (with an app password), an OpenAI API key
+          with credit, a daily LinkedIn job alert, and your resume.
+
+          Image: $IMAGE:$VERSION (Intel and Apple Silicon)
+
+          Upgrading from an earlier version: change the image tag in your docker-compose.yml
+          to $VERSION, then run "docker compose pull" and "docker compose up -d". Your settings,
+          resume and data are kept.
+
+          Tested on a Mac only. Please read the "LinkedIn's terms" section of the README
+          before using it.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" dist/job-agent-kit.zip \
+            --title "Job Agent Kit $VERSION" \
+            --notes-file notes.md \
+            --verify-tag

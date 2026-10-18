@@ -397,6 +397,51 @@ docker compose logs -f app
 
 ---
 
+## Releasing a new version (GitHub Actions)
+
+Pushing a version tag publishes everything for you: it builds the image, runs the
+personal-data check, pushes the image to GitHub's container registry (ghcr.io) for Intel
+and Apple Silicon, builds the kit zip, and creates a GitHub release with the zip attached.
+The image lives in GitHub Packages, and the kit is a zip, so it goes on the release page.
+The workflow is `.github/workflows/release.yml`.
+
+**One-time setup**
+1. The image package was first pushed by hand, so the workflow has to be given access to
+   it. On GitHub, open your profile, then Packages, then `job-agent`, then Package
+   settings. Under Manage Actions access, add this repository with the Write role.
+2. Commit and push `.github/workflows/release.yml`, the `kit/` folder, and the rest of the
+   project to GitHub.
+
+**Each release**
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Then watch the run in the repository's Actions tab. It takes roughly 10 to 20 minutes, mostly
+the Apple Silicon build. When it finishes, the release page has the new zip, and
+`releases/latest` points to it.
+
+**Rules**
+- The version comes from the tag: `v1.0.1` becomes image tag `1.0.1`. Tags must look like
+  `v1.2.3`.
+- Never reuse a version. The workflow stops if that image tag already exists.
+- The `latest` image tag moves to each new release.
+
+**If a run fails**
+- It stopped before pushing the image: fix the problem, then delete the tag and tag again.
+  `git push --delete origin v1.0.1` and `git tag -d v1.0.1` remove it.
+- It failed after the image was pushed: that version number is used up. Fix the problem
+  and release the next number, for example `v1.0.2`. Delete any half-made release on GitHub.
+- An error like "Resource not accessible by integration" or a 403 while pushing means the
+  package access in step 1 above is missing.
+
+The manual commands in the Makefile (`make push`, `make kit`) still work if you ever need
+them.
+
+---
+
 ## Troubleshooting
 
 - **`psycopg2-binary` fails to build locally**: you likely don't need to `pip
