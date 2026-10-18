@@ -1,6 +1,6 @@
 # Publishes a release whenever you push a version tag:
 #
-#   git tag v1.0.1
+#   git tag -a v1.0.1 -m "Release 1.0.1: what changed"
 #   git push origin v1.0.1
 #
 # It runs the same Makefile commands you would run by hand: build the image, check

@@ -415,9 +415,12 @@ The workflow is `.github/workflows/release.yml`.
 **Each release**
 
 ```bash
-git tag v1.0.1
+git tag -a v1.0.1 -m "Release 1.0.1: what changed"
 git push origin v1.0.1
 ```
+
+The `-a` makes an annotated tag, which records who made it, when, and your message. The
+workflow works with plain tags too, but annotated tags are the usual choice for releases.
 
 Then watch the run in the repository's Actions tab. It takes roughly 10 to 20 minutes, mostly
 the Apple Silicon build. When it finishes, the release page has the new zip, and
